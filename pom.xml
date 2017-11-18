@@ -85,6 +85,7 @@
 				</executions>
 				<configuration>
 					<executable>java</executable>
+					<mainClass>com.shopstyle.dl.fashion.FashionApplication</mainClass>
 				</configuration>
 			</plugin>
 		</plugins>
