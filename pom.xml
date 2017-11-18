@@ -16,7 +16,7 @@
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>1.5.8.RELEASE</version>
-		<relativePath/> <!-- lookup parent from repository -->
+		<relativePath /> <!-- lookup parent from repository -->
 	</parent>
 
 	<properties>
@@ -44,18 +44,10 @@
 			<artifactId>nd4j-native-platform</artifactId>
 			<version>${nd4j.version}</version>
 		</dependency>
-		<!--
-		<dependency>
-			<groupId>org.nd4j</groupId>
-			<artifactId>nd4j-cuda-7.5-platform</artifactId>
-			<version>${nd4j.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.nd4j</groupId>
-			<artifactId>nd4j-cuda-8.0-platform</artifactId>
-			<version>${nd4j.version}</version>
-		</dependency>
-		-->
+		<!-- <dependency> <groupId>org.nd4j</groupId> <artifactId>nd4j-cuda-7.5-platform</artifactId>
+			<version>${nd4j.version}</version> </dependency> <dependency> <groupId>org.nd4j</groupId>
+			<artifactId>nd4j-cuda-8.0-platform</artifactId> <version>${nd4j.version}</version>
+			</dependency> -->
 		<dependency>
 			<groupId>org.deeplearning4j</groupId>
 			<artifactId>deeplearning4j-zoo</artifactId>
@@ -79,6 +71,21 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.4.0</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<executable>java</executable>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
