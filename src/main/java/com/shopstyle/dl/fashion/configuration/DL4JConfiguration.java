@@ -82,7 +82,7 @@ public class DL4JConfiguration {
         vgg16Transfer.setListeners(new ScoreIterationListener());
 
 		System.out.println("Fitting....");
-//		vgg16Transfer.fit(rrdi);
+		vgg16Transfer.fit(rrdi);
 		System.out.println("Fit.");
 
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
@@ -93,7 +93,7 @@ public class DL4JConfiguration {
 			image = loader.asMatrix(file);
 			DataNormalization scaler = new VGG16ImagePreProcessor();
 			scaler.transform(image);
-			INDArray[] output = pretrainedNet.output(false, image);
+			INDArray[] output = vgg16Transfer.output(false, image);
 			System.out.println(output[0]);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
