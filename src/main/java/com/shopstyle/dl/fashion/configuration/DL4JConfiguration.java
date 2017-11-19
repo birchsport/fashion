@@ -79,10 +79,10 @@ public class DL4JConfiguration {
 				.build();
 
 		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, 2);
-        vgg16Transfer.setListeners(new ScoreIterationListener(100));
+        vgg16Transfer.setListeners(new ScoreIterationListener());
 
 		System.out.println("Fitting....");
-		vgg16Transfer.fit(rrdi);
+//		vgg16Transfer.fit(rrdi);
 		System.out.println("Fit.");
 
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
