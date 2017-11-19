@@ -108,8 +108,8 @@ public class DL4JConfiguration {
 		}
 		System.out.println("Fit.");
 //
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
-		File file = new File(dir, "cat.9993.jpg");
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/dogs");
+		File file = new File(dir, "dog.9993.jpg");
 		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 		INDArray image;
 		try {
