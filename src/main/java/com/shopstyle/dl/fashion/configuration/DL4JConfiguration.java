@@ -77,7 +77,7 @@ public class DL4JConfiguration {
 						"fc2")
 				.build();
 
-		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 100, 1, 2);
+		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, 2);
 
 		System.out.println("Fitting....");
 		pretrainedNet.fit(rrdi);
