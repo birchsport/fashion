@@ -98,15 +98,15 @@ public class DL4JConfiguration {
 		TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
 
 		System.out.println("Fitting....");
-		 transferLearningHelper.fitFeaturized(rrdi);
-		System.out.println("Fit.");
+//		 transferLearningHelper.fitFeaturized(rrdi);
 
-//		int iter = 0;
-//		while (rrdi.hasNext()) {
-//			vgg16Transfer.fit(rrdi.next());
-//			log.info("iter " + iter + " ....");
-//			iter++;
-//		}
+		int iter = 0;
+		while (rrdi.hasNext()) {
+			vgg16Transfer.fit(rrdi.next());
+			log.info("iter " + iter + " ....");
+			iter++;
+		}
+		System.out.println("Fit.");
 //
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
 		File file = new File(dir, "cat.9993.jpg");
