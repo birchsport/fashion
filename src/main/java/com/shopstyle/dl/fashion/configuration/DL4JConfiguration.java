@@ -16,9 +16,9 @@ import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.Updater;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
-import org.deeplearning4j.nn.modelimport.keras.trainedmodels.TrainedModels;
 import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
 import org.deeplearning4j.nn.transferlearning.TransferLearning;
+import org.deeplearning4j.nn.transferlearning.TransferLearningHelper;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.zoo.PretrainedType;
@@ -69,18 +69,21 @@ public class DL4JConfiguration {
 
 		ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
 				.fineTuneConfiguration(fineTuneConf).setFeatureExtractor("fc2")
-//				.removeVertexKeepConnections("predictions")
-//				.addLayer("predictions",
-//						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nIn(4096)
-//								.nOut(numClasses).weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build(),
-//						"fc2")
+				.removeVertexKeepConnections("predictions")
+				.addLayer("predictions",
+						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nIn(4096)
+								.nOut(numClasses).weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build(),
+						"fc2")
 				.build();
+
 
 		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, numClasses);
         vgg16Transfer.setListeners(new ScoreIterationListener());
 
+        TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
+
 		System.out.println("Fitting....");
-		vgg16Transfer.fit(rrdi);
+        transferLearningHelper.fitFeaturized(rrdi);
 		System.out.println("Fit.");
 
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
