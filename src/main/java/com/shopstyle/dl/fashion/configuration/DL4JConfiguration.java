@@ -53,7 +53,7 @@ public class DL4JConfiguration {
 		int rngSeed = 123; // random number seed for reproducibility
 		int numEpochs = 15; // number of epochs to perform
 		double rate = 0.0015; // learning rate
-		int numClasses = 5;
+		int numClasses = 2;
 
 		FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().learningRate(5e-5)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
