@@ -20,6 +20,7 @@ import org.deeplearning4j.nn.modelimport.keras.trainedmodels.TrainedModels;
 import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
 import org.deeplearning4j.nn.transferlearning.TransferLearning;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
 import org.deeplearning4j.zoo.model.VGG16;
@@ -78,6 +79,7 @@ public class DL4JConfiguration {
 				.build();
 
 		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 25, 1, 2);
+        vgg16Transfer.setListeners(new ScoreIterationListener(100));
 
 		System.out.println("Fitting....");
 		vgg16Transfer.fit(rrdi);
