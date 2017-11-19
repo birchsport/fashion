@@ -85,7 +85,7 @@ public class DL4JConfiguration {
 //		vgg16Transfer.fit(rrdi);
 		System.out.println("Fit.");
 
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
 		File file = new File(dir, "cat.9993.jpg");
 		NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
 		INDArray image;
