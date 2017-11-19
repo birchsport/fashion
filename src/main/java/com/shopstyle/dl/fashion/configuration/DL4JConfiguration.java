@@ -92,7 +92,7 @@ public class DL4JConfiguration {
 				.build();
 		System.out.println(vgg16Transfer.summary());
 
-		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, numClasses);
+		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 10, 1, numClasses);
 		vgg16Transfer.setListeners(new ScoreIterationListener());
 
 		TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
