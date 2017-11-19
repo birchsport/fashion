@@ -8,6 +8,7 @@ import org.datavec.api.io.labels.ParentPathLabelGenerator;
 import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.split.FileSplit;
 import org.datavec.image.loader.BaseImageLoader;
+import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.nn.api.Model;
@@ -15,6 +16,7 @@ import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.Updater;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
+import org.deeplearning4j.nn.modelimport.keras.trainedmodels.TrainedModels;
 import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
 import org.deeplearning4j.nn.transferlearning.TransferLearning;
 import org.deeplearning4j.nn.weights.WeightInit;
@@ -22,6 +24,9 @@ import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
 import org.deeplearning4j.zoo.model.VGG16;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
+import org.nd4j.linalg.dataset.api.preprocessor.VGG16ImagePreProcessor;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -78,22 +83,35 @@ public class DL4JConfiguration {
 		pretrainedNet.fit(rrdi);
 		System.out.println("Fit.");
 
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
+		File file = new File(dir, "cat.9993.jpg");
+		NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
+		INDArray image;
+		try {
+			image = loader.asMatrix(file);
+			DataNormalization scaler = new VGG16ImagePreProcessor();
+			scaler.transform(image);
+			INDArray[] output = pretrainedNet.output(false, image);
+			System.out.println(output[0]);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return pretrainedNet;
 
 	}
 
 	private static RecordReader loadData() {
 		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train"));
-        ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-        ImageRecordReader recordReader = new ImageRecordReader(height,width,channels,labelMaker);
-        try {
+		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
+		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
+		try {
 			recordReader.initialize(split);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-        return recordReader;
-
+		return recordReader;
 
 	}
 }
