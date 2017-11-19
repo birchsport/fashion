@@ -80,7 +80,7 @@ public class DL4JConfiguration {
 		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, 2);
 
 		System.out.println("Fitting....");
-		pretrainedNet.fit(rrdi);
+		vgg16Transfer.fit(rrdi);
 		System.out.println("Fit.");
 
 //		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
