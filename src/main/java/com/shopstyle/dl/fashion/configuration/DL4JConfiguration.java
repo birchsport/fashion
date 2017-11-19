@@ -108,7 +108,7 @@ public class DL4JConfiguration {
 		}
 		System.out.println("Fit.");
 
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train1/cats");
 		File file = new File(dir, "cat.9993.jpg");
 		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 		INDArray image;
@@ -127,7 +127,7 @@ public class DL4JConfiguration {
 	}
 
 	private static RecordReader loadData() {
-		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train"));
+		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train1"));
 		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
 		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
 		try {
