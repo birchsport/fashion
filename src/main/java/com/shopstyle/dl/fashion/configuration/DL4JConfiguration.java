@@ -47,8 +47,6 @@ public class DL4JConfiguration {
 
 	@Bean
 	public Model vgg16() {
-		final int numRows = 28;
-		final int numColumns = 28;
 		int outputNum = 10; // number of output classes
 		int batchSize = 64; // batch size for each epoch
 		int rngSeed = 123; // random number seed for reproducibility
@@ -56,7 +54,7 @@ public class DL4JConfiguration {
 		double rate = 0.0015; // learning rate
 		int numClasses = 2;
 
-		FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().learningRate(5e-5)
+		FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().learningRate(rate)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
 				.seed(rngSeed).build();
 
@@ -71,14 +69,14 @@ public class DL4JConfiguration {
 
 		ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
 				.fineTuneConfiguration(fineTuneConf).setFeatureExtractor("fc2")
-				.removeVertexKeepConnections("predictions")
-				.addLayer("predictions",
-						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nIn(4096)
-								.nOut(numClasses).weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build(),
-						"fc2")
+//				.removeVertexKeepConnections("predictions")
+//				.addLayer("predictions",
+//						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD).nIn(4096)
+//								.nOut(numClasses).weightInit(WeightInit.XAVIER).activation(Activation.SOFTMAX).build(),
+//						"fc2")
 				.build();
 
-		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, 2);
+		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, numClasses);
         vgg16Transfer.setListeners(new ScoreIterationListener());
 
 		System.out.println("Fitting....");
@@ -87,7 +85,7 @@ public class DL4JConfiguration {
 
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
 		File file = new File(dir, "cat.9993.jpg");
-		NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
+		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 		INDArray image;
 		try {
 			image = loader.asMatrix(file);
