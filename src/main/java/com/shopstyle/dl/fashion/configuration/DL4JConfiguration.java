@@ -22,6 +22,7 @@ import org.deeplearning4j.nn.transferlearning.TransferLearning;
 import org.deeplearning4j.nn.transferlearning.TransferLearningHelper;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.deeplearning4j.util.ModelSerializer;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
 import org.deeplearning4j.zoo.model.VGG16;
@@ -58,56 +59,78 @@ public class DL4JConfiguration {
 		double rate = 0.0015; // learning rate
 		int numClasses = 2;
 
-		FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().activation(Activation.LEAKYRELU)
-				.weightInit(WeightInit.RELU).learningRate(5e-5)
-				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
-				.dropOut(0.5).seed(seed).build();
-
-		ZooModel zooModel = new VGG16();
 		ComputationGraph pretrainedNet = null;
-		try {
-			pretrainedNet = (ComputationGraph) zooModel.initPretrained(PretrainedType.IMAGENET);
-		} catch (IOException e) {
-			throw new IllegalStateException("Unable to load pretrained model");
+		File locationToSave = new File("MyComputationGraph.zip");
+		if (locationToSave.exists()) {
+			try {
+				pretrainedNet = ModelSerializer.restoreComputationGraph(locationToSave);
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		} else {
+
+			FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().activation(Activation.LEAKYRELU)
+					.weightInit(WeightInit.RELU).learningRate(5e-5)
+					.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
+					.dropOut(0.5).seed(seed).build();
+
+			ZooModel zooModel = new VGG16();
+			try {
+				pretrainedNet = (ComputationGraph) zooModel.initPretrained(PretrainedType.IMAGENET);
+			} catch (IOException e) {
+				throw new IllegalStateException("Unable to load pretrained model");
+			}
+			pretrainedNet.init();
+
+			ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
+					.fineTuneConfiguration(fineTuneConf).setFeatureExtractor(featureExtractionLayer) // "block5_pool"
+																										// and
+																										// below are
+																										// frozen
+					.nOutReplace("fc2", 1024, WeightInit.XAVIER) // modify nOut of the "fc2" vertex
+					.removeVertexAndConnections("predictions") // remove the final vertex and it's connections
+					.addLayer("fc3", new DenseLayer.Builder().activation(Activation.TANH).nIn(1024).nOut(256).build(),
+							"fc2") // add in a new dense layer
+					.addLayer("newpredictions",
+							new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+									.activation(Activation.SOFTMAX).nIn(256).nOut(numClasses).build(),
+							"fc3") // add in a final output dense layer,
+									// note that learning related configurations applied on a new layer here will be
+									// honored
+									// In other words - these will override the finetune confs.
+									// For eg. activation function will be softmax not RELU
+					.setOutputs("newpredictions") // since we removed the output vertex and it's connections we need to
+													// specify outputs for the graph
+					.build();
+			System.out.println(vgg16Transfer.summary());
+
+			RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, numClasses);
+			vgg16Transfer.setListeners(new ScoreIterationListener());
+
+			TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
+
+			System.out.println("Fitting....");
+			// transferLearningHelper.fitFeaturized(rrdi);
+
+			int iter = 0;
+			while (rrdi.hasNext()) {
+				vgg16Transfer.fit(rrdi.next());
+				log.info("iter " + iter + " ....");
+				iter++;
+			}
+			System.out.println("Fit.");
+
+			boolean saveUpdater = false;
+			try {
+				ModelSerializer.writeModel(vgg16Transfer, locationToSave, saveUpdater);
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+			pretrainedNet = vgg16Transfer;
 		}
-		pretrainedNet.init();
-
-		ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
-				.fineTuneConfiguration(fineTuneConf).setFeatureExtractor(featureExtractionLayer) // "block5_pool" and
-																									// below are frozen
-				.nOutReplace("fc2", 1024, WeightInit.XAVIER) // modify nOut of the "fc2" vertex
-				.removeVertexAndConnections("predictions") // remove the final vertex and it's connections
-				.addLayer("fc3", new DenseLayer.Builder().activation(Activation.TANH).nIn(1024).nOut(256).build(),
-						"fc2") // add in a new dense layer
-				.addLayer("newpredictions",
-						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
-								.activation(Activation.SOFTMAX).nIn(256).nOut(numClasses).build(),
-						"fc3") // add in a final output dense layer,
-								// note that learning related configurations applied on a new layer here will be
-								// honored
-								// In other words - these will override the finetune confs.
-								// For eg. activation function will be softmax not RELU
-				.setOutputs("newpredictions") // since we removed the output vertex and it's connections we need to
-												// specify outputs for the graph
-				.build();
-		System.out.println(vgg16Transfer.summary());
-
-		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 5, 1, numClasses);
-		vgg16Transfer.setListeners(new ScoreIterationListener());
-
-		TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
-
-		System.out.println("Fitting....");
-//		 transferLearningHelper.fitFeaturized(rrdi);
-
-		int iter = 0;
-		while (rrdi.hasNext()) {
-			vgg16Transfer.fit(rrdi.next());
-			log.info("iter " + iter + " ....");
-			iter++;
-		}
-		System.out.println("Fit.");
-//
+		//
 		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/dogs");
 		File file = new File(dir, "dog.9993.jpg");
 		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
