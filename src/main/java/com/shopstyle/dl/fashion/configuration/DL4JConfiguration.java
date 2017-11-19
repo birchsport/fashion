@@ -78,7 +78,7 @@ public class DL4JConfiguration {
 						"fc2")
 				.build();
 
-		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 10, 1, 2);
+		RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, 2);
         vgg16Transfer.setListeners(new ScoreIterationListener(100));
 
 		System.out.println("Fitting....");
