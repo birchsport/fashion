@@ -97,18 +97,18 @@ public class DL4JConfiguration {
 
 		TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
 
-		// transferLearningHelper.fitFeaturized(rrdi);
-
 		System.out.println("Fitting....");
-		int iter = 0;
-		while (rrdi.hasNext()) {
-			vgg16Transfer.fit(rrdi.next());
-			log.info("iter " + iter + " ....");
-			iter++;
-		}
+		 transferLearningHelper.fitFeaturized(rrdi);
 		System.out.println("Fit.");
 
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train1/cats");
+//		int iter = 0;
+//		while (rrdi.hasNext()) {
+//			vgg16Transfer.fit(rrdi.next());
+//			log.info("iter " + iter + " ....");
+//			iter++;
+//		}
+//
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cats");
 		File file = new File(dir, "cat.9993.jpg");
 		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 		INDArray image;
