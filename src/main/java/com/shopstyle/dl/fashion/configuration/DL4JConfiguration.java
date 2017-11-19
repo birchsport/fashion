@@ -83,20 +83,20 @@ public class DL4JConfiguration {
 		pretrainedNet.fit(rrdi);
 		System.out.println("Fit.");
 
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
-		File file = new File(dir, "cat.9993.jpg");
-		NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
-		INDArray image;
-		try {
-			image = loader.asMatrix(file);
-			DataNormalization scaler = new VGG16ImagePreProcessor();
-			scaler.transform(image);
-			INDArray[] output = pretrainedNet.output(false, image);
-			System.out.println(output[0]);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+//		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/cat");
+//		File file = new File(dir, "cat.9993.jpg");
+//		NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
+//		INDArray image;
+//		try {
+//			image = loader.asMatrix(file);
+//			DataNormalization scaler = new VGG16ImagePreProcessor();
+//			scaler.transform(image);
+//			INDArray[] output = pretrainedNet.output(false, image);
+//			System.out.println(output[0]);
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
 		return pretrainedNet;
 
 	}
