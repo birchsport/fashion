@@ -62,7 +62,7 @@ public class DL4JConfiguration {
 	private RecordReaderDataSetIterator testDataIter;
 
 	@Bean
-	public Model vgg16() {
+	public MultiLayerNetwork createNetwork() {
 		double rate = 0.006; // learning rate
 		loadData();
 		Optional<MultiLayerNetwork> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
@@ -187,7 +187,8 @@ public class DL4JConfiguration {
 		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
-			log.info("Labels: {}", next.getLabelNamesList());
+			log.info("Labels: {}", next.getLabelNames());
+			log.info("Labels: {}", next.getLabels());
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
 			log.info("Predictions: {}", next.getLabelNamesList());
 			eval.eval(next.getLabels(), output); // check the prediction against the true class
