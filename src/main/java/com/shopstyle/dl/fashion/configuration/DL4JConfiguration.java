@@ -77,8 +77,9 @@ public class DL4JConfiguration {
 				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
 				.updater(new Nesterovs(0.98)).regularization(true).l2(rate * 0.005).list()
 				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(500).build())
-				.layer(1, new DenseLayer.Builder().nIn(500).nOut(100).build())
-				.layer(2,
+				.layer(1, new DenseLayer.Builder().nIn(500).nOut(300).build())
+				.layer(2, new DenseLayer.Builder().nIn(300).nOut(100).build())
+				.layer(3,
 						new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD).activation(Activation.SOFTMAX)
 								.nIn(100).nOut(numClasses).build())
 				.pretrain(false).backprop(true).setInputType(InputType.convolutional(height, width, channels)).build();
