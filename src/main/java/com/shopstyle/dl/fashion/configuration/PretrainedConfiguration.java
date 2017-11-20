@@ -5,29 +5,26 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.Random;
 
-import org.datavec.api.io.filters.BalancedPathFilter;
 import org.datavec.api.io.labels.ParentPathLabelGenerator;
 import org.datavec.api.split.FileSplit;
-import org.datavec.api.split.InputSplit;
 import org.datavec.image.loader.BaseImageLoader;
 import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
+import org.deeplearning4j.api.storage.StatsStorage;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.eval.Evaluation;
-import org.deeplearning4j.nn.api.Model;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.Updater;
-import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
 import org.deeplearning4j.nn.transferlearning.TransferLearning;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.deeplearning4j.ui.api.UIServer;
+import org.deeplearning4j.ui.stats.StatsListener;
+import org.deeplearning4j.ui.storage.InMemoryStatsStorage;
 import org.deeplearning4j.util.ModelSerializer;
 import org.deeplearning4j.zoo.PretrainedType;
 import org.deeplearning4j.zoo.ZooModel;
@@ -35,13 +32,9 @@ import org.deeplearning4j.zoo.model.VGG16;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
-import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
-import org.nd4j.linalg.dataset.api.preprocessor.VGG16ImagePreProcessor;
-import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
-import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction;
 import org.slf4j.Logger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -51,7 +44,6 @@ import org.springframework.util.StopWatch;
 public class PretrainedConfiguration {
 
 	private static final Logger log = org.slf4j.LoggerFactory.getLogger(PretrainedConfiguration.class);
-	private static final String[] allowedExtensions = BaseImageLoader.ALLOWED_FORMATS;
 	private static final String COMPUTATION_GRAPH_FILE_NAME = "fashion_comp_graph.zip";
 
 	private static final long seed = 12345;
@@ -65,11 +57,10 @@ public class PretrainedConfiguration {
 	private static final int channels = 3;
 	private static final int batchSize = 64;
 	private static final int numEpochs = 1;
-	private int numClasses = 1;
+	private int numClasses = 2;
 	private RecordReaderDataSetIterator trainDataIter;
 	private RecordReaderDataSetIterator testDataIter;
 	private static final String featureExtractionLayer = "block5_pool";
-
 
 	@Bean
 	public ComputationGraph createComputationGraph() {
@@ -87,8 +78,21 @@ public class PretrainedConfiguration {
 
 		log.info("Building model....");
 		ComputationGraph graph = buildPretrainedGraph(rate);
-		graph.setListeners(new ScoreIterationListener(5));
+		// graph.setListeners(new ScoreIterationListener(5));
+		UIServer uiServer = UIServer.getInstance();
 
+		// Configure where the network information (gradients, activations, score vs.
+		// time etc) is to be stored
+		// Then add the StatsListener to collect this information from the network, as
+		// it trains
+		StatsStorage statsStorage = new InMemoryStatsStorage(); // Alternative: new FileStatsStorage(File) - see
+																// UIStorageExample
+		int listenerFrequency = 1;
+		graph.setListeners(new StatsListener(statsStorage, listenerFrequency), new ScoreIterationListener(5));
+
+		// Attach the StatsStorage instance to the UI: this allows the contents of the
+		// StatsStorage to be visualized
+		uiServer.attach(statsStorage);
 
 		log.info("Graph summary:");
 		log.info(graph.summary());
@@ -165,17 +169,17 @@ public class PretrainedConfiguration {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 4, 1,
+		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, batchSize, 1,
 				numClasses);
 		DataNormalization trainScaler = new ImagePreProcessingScaler(0, 1);
-//		trainScaler.fit(trainDataIter);
-//		trainDataIter.setPreProcessor(trainScaler);
+		// trainScaler.fit(trainDataIter);
+		// trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
 		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 4, 1, numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
-//		testScaler.fit(testDataIter);
-//		testDataIter.setPreProcessor(testScaler);
+		// testScaler.fit(testDataIter);
+		// testDataIter.setPreProcessor(testScaler);
 		this.testDataIter = testDataIter;
 
 	}
@@ -206,9 +210,9 @@ public class PretrainedConfiguration {
 		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
-//			log.info("Labels: {}", next.getLabels());
+			// log.info("Labels: {}", next.getLabels());
 			INDArray[] output = network.output(next.getFeatureMatrix()); // get the networks prediction
-//			log.info("Predictions: {}", output);
+			// log.info("Predictions: {}", output);
 			eval.eval(next.getLabels(), output[0]); // check the prediction against the true class
 		}
 
