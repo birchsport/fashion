@@ -18,13 +18,20 @@ import org.deeplearning4j.nn.api.Model;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.Updater;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
+import org.deeplearning4j.nn.transferlearning.TransferLearning;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.util.ModelSerializer;
+import org.deeplearning4j.zoo.PretrainedType;
+import org.deeplearning4j.zoo.ZooModel;
+import org.deeplearning4j.zoo.model.VGG16;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
@@ -33,6 +40,7 @@ import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
 import org.nd4j.linalg.dataset.api.preprocessor.VGG16ImagePreProcessor;
 import org.nd4j.linalg.learning.config.Nesterovs;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction;
 import org.slf4j.Logger;
 import org.springframework.context.annotation.Bean;
@@ -40,9 +48,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StopWatch;
 
 @Configuration
-public class DL4JConfiguration {
+public class PretrainedConfiguration {
 
-	private static final Logger log = org.slf4j.LoggerFactory.getLogger(DL4JConfiguration.class);
+	private static final Logger log = org.slf4j.LoggerFactory.getLogger(PretrainedConfiguration.class);
 	private static final String[] allowedExtensions = BaseImageLoader.ALLOWED_FORMATS;
 	private static final String COMPUTATION_GRAPH_FILE_NAME = "fashion_comp_graph.zip";
 
@@ -60,15 +68,17 @@ public class DL4JConfiguration {
 	private int numClasses = 1;
 	private RecordReaderDataSetIterator trainDataIter;
 	private RecordReaderDataSetIterator testDataIter;
+	private static final String featureExtractionLayer = "block5_pool";
+
 
 	@Bean
-	public MultiLayerNetwork createNetwork() {
+	public ComputationGraph createComputationGraph() {
 		double rate = 0.001; // learning rate
 		loadData();
-		Optional<MultiLayerNetwork> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
+		Optional<ComputationGraph> optional = loadGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
 		if (optional.isPresent()) {
 			log.info("Loaded pretrained model:");
-			MultiLayerNetwork network = optional.get();
+			ComputationGraph network = optional.get();
 			log.info(network.summary());
 			// validateSingleImage(network);
 			evaluateNetwork(network);
@@ -76,60 +86,63 @@ public class DL4JConfiguration {
 		}
 
 		log.info("Building model....");
-		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
-				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).iterations(1)
-				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
-				.updater(new Nesterovs(0.98)).regularization(true).l2(1e-4).list()
-				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(1000).build())
-				.layer(1,
-						new DenseLayer.Builder().nIn(1000).nOut(500).weightInit(WeightInit.XAVIER)
-								.activation(Activation.RELU).build())
-				.layer(2,
-						new DenseLayer.Builder().nIn(500).nOut(300).weightInit(WeightInit.XAVIER)
-								.activation(Activation.RELU).build())
-				.layer(3,
-						new DenseLayer.Builder().nIn(300).nOut(100).weightInit(WeightInit.XAVIER)
-								.activation(Activation.RELU).build())
-				.layer(4,
-						new OutputLayer.Builder(LossFunction.MSE).activation(Activation.SOFTMAX)
-								.nIn(100).nOut(numClasses).build())
-				.pretrain(false).backprop(true).setInputType(InputType.convolutional(height, width, channels)).build();
+		ComputationGraph graph = buildPretrainedGraph(rate);
+		graph.setListeners(new ScoreIterationListener(5));
 
-		MultiLayerNetwork network = new MultiLayerNetwork(conf);
-		network.init();
-		network.setListeners(new ScoreIterationListener(50));
 
-		log.info("Network summary:");
-		log.info(network.summary());
+		log.info("Graph summary:");
+		log.info(graph.summary());
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		log.info("Fitting....");
 		for (int i = 0; i < numEpochs; i++) {
 			log.info("Epoch {}", i);
-			network.fit(trainDataIter);
+			graph.fit(trainDataIter);
 		}
 		stopWatch.stop();
 		log.info("Fit complete. ELapsed time: [{}]", stopWatch.toString());
-		evaluateNetwork(network);
-		saveNetwork(network, new File(COMPUTATION_GRAPH_FILE_NAME));
-		return network;
+		evaluateNetwork(graph);
+		saveNetwork(graph, new File(COMPUTATION_GRAPH_FILE_NAME));
+		return graph;
 
 	}
 
-	private void validateSingleImage(MultiLayerNetwork network) {
-		File dir = new File(System.getProperty("user.home"), "/popsugar/shopstyle/core/train/sweaters");
-		File file = new File(dir, "5015.jpg");
-		log.info("Validating: {}", file.getAbsolutePath());
-		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
+	private ComputationGraph buildPretrainedGraph(double rate) {
+		FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().activation(Activation.LEAKYRELU)
+				.weightInit(WeightInit.RELU).learningRate(5e-5)
+				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
+				.dropOut(0.5).seed(seed).build();
+
+		ZooModel zooModel = new VGG16();
+		ComputationGraph pretrainedNet;
 		try {
-			INDArray image = loader.asMatrix(file);
-			DataNormalization scaler = new VGG16ImagePreProcessor();
-			scaler.transform(image);
-			INDArray output = network.output(image);
-			log.info("Predictions: {}", output);
+			pretrainedNet = (ComputationGraph) zooModel.initPretrained(PretrainedType.IMAGENET);
 		} catch (IOException e) {
-			e.printStackTrace();
+			throw new IllegalStateException("Unable to load pretrained model");
 		}
+		pretrainedNet.init();
+
+		ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
+				.fineTuneConfiguration(fineTuneConf).setFeatureExtractor(featureExtractionLayer) // "block5_pool"
+																									// and
+																									// below are
+																									// frozen
+				.nOutReplace("fc2", 1024, WeightInit.XAVIER) // modify nOut of the "fc2" vertex
+				.removeVertexAndConnections("predictions") // remove the final vertex and it's connections
+				.addLayer("fc3", new DenseLayer.Builder().activation(Activation.TANH).nIn(1024).nOut(256).build(),
+						"fc2") // add in a new dense layer
+				.addLayer("newpredictions",
+						new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+								.activation(Activation.SOFTMAX).nIn(256).nOut(numClasses).build(),
+						"fc3") // add in a final output dense layer,
+								// note that learning related configurations applied on a new layer here will be
+								// honored
+								// In other words - these will override the finetune confs.
+								// For eg. activation function will be softmax not RELU
+				.setOutputs("newpredictions") // since we removed the output vertex and it's connections we need to
+												// specify outputs for the graph
+				.build();
+		return vgg16Transfer;
 	}
 
 	private void loadData() {
@@ -152,26 +165,26 @@ public class DL4JConfiguration {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 64, 1,
+		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 4, 1,
 				numClasses);
 		DataNormalization trainScaler = new ImagePreProcessingScaler(0, 1);
-		trainScaler.fit(trainDataIter);
-		trainDataIter.setPreProcessor(trainScaler);
+//		trainScaler.fit(trainDataIter);
+//		trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
-		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 64, 1, numClasses);
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 4, 1, numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
-		testScaler.fit(testDataIter);
-		testDataIter.setPreProcessor(testScaler);
+//		testScaler.fit(testDataIter);
+//		testDataIter.setPreProcessor(testScaler);
 		this.testDataIter = testDataIter;
 
 	}
 
-	private Optional<MultiLayerNetwork> loadComputationalGraph(File file) {
-		MultiLayerNetwork pretrainedNet = null;
+	private Optional<ComputationGraph> loadGraph(File file) {
+		ComputationGraph pretrainedNet = null;
 		if (file.exists()) {
 			try {
-				pretrainedNet = ModelSerializer.restoreMultiLayerNetwork(file);
+				pretrainedNet = ModelSerializer.restoreComputationGraph(file);
 			} catch (IOException e1) {
 				e1.printStackTrace();
 			}
@@ -179,7 +192,7 @@ public class DL4JConfiguration {
 		return Optional.ofNullable(pretrainedNet);
 	}
 
-	private void saveNetwork(MultiLayerNetwork network, File file) {
+	private void saveNetwork(ComputationGraph network, File file) {
 		try {
 			ModelSerializer.writeModel(network, file, true);
 		} catch (IOException e1) {
@@ -188,15 +201,15 @@ public class DL4JConfiguration {
 		}
 	}
 
-	private void evaluateNetwork(MultiLayerNetwork network) {
+	private void evaluateNetwork(ComputationGraph network) {
 		log.info("Evaluate network....");
 		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
 //			log.info("Labels: {}", next.getLabels());
-			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
+			INDArray[] output = network.output(next.getFeatureMatrix()); // get the networks prediction
 //			log.info("Predictions: {}", output);
-			eval.eval(next.getLabels(), output); // check the prediction against the true class
+			eval.eval(next.getLabels(), output[0]); // check the prediction against the true class
 		}
 
 		log.info(eval.stats());
