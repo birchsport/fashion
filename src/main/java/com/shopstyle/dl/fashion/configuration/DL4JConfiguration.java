@@ -54,7 +54,7 @@ public class DL4JConfiguration {
 	private static final int width = 205;
 	private static final int channels = 3;
 	private static final int batchSize = 64;
-	private static final int numEpochs = 5;
+	private static final int numEpochs = 15;
 	private int numClasses = 1;
 	private RecordReaderDataSetIterator trainDataIter;
 	private RecordReaderDataSetIterator testDataIter;
