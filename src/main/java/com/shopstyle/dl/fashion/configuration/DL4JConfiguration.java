@@ -176,9 +176,8 @@ public class DL4JConfiguration {
 	private void evaluateNetwork(MultiLayerNetwork network) {
 		log.info("Evaluate network....");
 		Evaluation eval = new Evaluation(numClasses); // create an evaluation object with 10 possible classes
-		DataSetIterator testData = testDataIter;
-		while (testData.hasNext()) {
-			DataSet next = testData.next();
+		while (testDataIter.hasNext()) {
+			DataSet next = testDataIter.next();
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
 			eval.eval(next.getLabels(), output); // check the prediction against the true class
 		}
