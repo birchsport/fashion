@@ -54,6 +54,7 @@ public class DL4JConfiguration {
 	private static final int width = 205;
 	private static final int channels = 3;
 	private static final int batchSize = 64;
+	private static final int numEpochs = 5;
 	private int numClasses = 1;
 	private RecordReaderDataSetIterator trainDataIter;
 	private RecordReaderDataSetIterator testDataIter;
@@ -67,7 +68,7 @@ public class DL4JConfiguration {
 			log.info("Loaded pretrained model:");
 			MultiLayerNetwork network = optional.get();
 			log.info(network.summary());
-//			validateSingleImage(network);
+			// validateSingleImage(network);
 			evaluateNetwork(network);
 			return network;
 		}
@@ -95,7 +96,10 @@ public class DL4JConfiguration {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		log.info("Fitting....");
-		network.fit(trainDataIter);
+		for (int i = 0; i < numEpochs; i++) {
+			log.info("Epoch {}", i);
+			network.fit(trainDataIter);
+		}
 		stopWatch.stop();
 		log.info("Fit complete. ELapsed time: [{}]", stopWatch.toString());
 		evaluateNetwork(network);
@@ -123,10 +127,8 @@ public class DL4JConfiguration {
 	private void loadData() {
 		File trainDir = new File(System.getProperty("user.home"), "/data/dogscats/train");
 		File testDir = new File(System.getProperty("user.home"), "/data/dogscats/valid");
-		FileSplit trainFilesInDir = new FileSplit(trainDir,
-				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
-		FileSplit testFilesInDir = new FileSplit(testDir,
-				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
+		FileSplit trainFilesInDir = new FileSplit(trainDir, NativeImageLoader.ALLOWED_FORMATS, randNumGen);
+		FileSplit testFilesInDir = new FileSplit(testDir, NativeImageLoader.ALLOWED_FORMATS, randNumGen);
 		numClasses = trainDir.list().length;
 		log.info("numClasses = {}", numClasses);
 		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
@@ -141,13 +143,15 @@ public class DL4JConfiguration {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 64, 1, numClasses);
+		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 64, 1,
+				numClasses);
 		DataNormalization trainScaler = new ImagePreProcessingScaler(0, 1);
 		trainScaler.fit(trainDataIter);
 		trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
-		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, batchSize, 1, numClasses);
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, batchSize, 1,
+				numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
 		testScaler.fit(testDataIter);
 		testDataIter.setPreProcessor(testScaler);
