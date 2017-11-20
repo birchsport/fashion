@@ -50,8 +50,10 @@ public class DL4JConfiguration {
 
 	private static final Random randNumGen = new Random(seed);
 
-	private static final int height = 164;
-	private static final int width = 205;
+//	private static final int height = 164;
+//	private static final int width = 205;
+	private static final int height = 224;
+	private static final int width = 224;
 	private static final int channels = 3;
 	private static final int batchSize = 64;
 	private static final int numEpochs = 15;
@@ -89,7 +91,7 @@ public class DL4JConfiguration {
 
 		MultiLayerNetwork network = new MultiLayerNetwork(conf);
 		network.init();
-		network.setListeners(new ScoreIterationListener(5));
+		network.setListeners(new ScoreIterationListener(50));
 
 		log.info("Network summary:");
 		log.info(network.summary());
@@ -182,10 +184,12 @@ public class DL4JConfiguration {
 
 	private void evaluateNetwork(MultiLayerNetwork network) {
 		log.info("Evaluate network....");
-		Evaluation eval = new Evaluation(numClasses); // create an evaluation object with 10 possible classes
+		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
+			log.info("Labels: {}", next.getLabelNamesList());
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
+			log.info("Predictions: {}", next.getLabelNamesList());
 			eval.eval(next.getLabels(), output); // check the prediction against the true class
 		}
 
