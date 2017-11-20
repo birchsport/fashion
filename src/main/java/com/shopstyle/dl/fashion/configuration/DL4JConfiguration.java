@@ -53,13 +53,14 @@ public class DL4JConfiguration {
 	private static final int height = 164;
 	private static final int width = 205;
 	private static final int channels = 3;
+	private static final int batchSize = 64;
 	private int numClasses = 1;
 	private RecordReaderDataSetIterator trainDataIter;
 	private RecordReaderDataSetIterator testDataIter;
 
 	@Bean
 	public Model vgg16() {
-		double rate = 0.0015; // learning rate
+		double rate = 0.006; // learning rate
 		loadData();
 		Optional<MultiLayerNetwork> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
 		if (optional.isPresent()) {
@@ -75,11 +76,12 @@ public class DL4JConfiguration {
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).iterations(1)
 				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
-				.updater(new Nesterovs(0.98)).regularization(true).l2(rate * 0.005).list()
-				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(500).build())
-				.layer(1, new DenseLayer.Builder().nIn(500).nOut(300).build())
-				.layer(2, new DenseLayer.Builder().nIn(300).nOut(100).build())
-				.layer(3,
+				.updater(new Nesterovs(0.98)).regularization(true).l2(1e-4).list()
+				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(1000).build())
+				.layer(1, new DenseLayer.Builder().nIn(1000).nOut(500).build())
+				.layer(2, new DenseLayer.Builder().nIn(500).nOut(300).build())
+				.layer(3, new DenseLayer.Builder().nIn(300).nOut(100).build())
+				.layer(4,
 						new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD).activation(Activation.SOFTMAX)
 								.nIn(100).nOut(numClasses).build())
 				.pretrain(false).backprop(true).setInputType(InputType.convolutional(height, width, channels)).build();
@@ -139,13 +141,13 @@ public class DL4JConfiguration {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 20, 1, numClasses);
+		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 64, 1, numClasses);
 		DataNormalization trainScaler = new ImagePreProcessingScaler(0, 1);
 		trainScaler.fit(trainDataIter);
 		trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
-		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 20, 1, numClasses);
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, batchSize, 1, numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
 		testScaler.fit(testDataIter);
 		testDataIter.setPreProcessor(testScaler);
