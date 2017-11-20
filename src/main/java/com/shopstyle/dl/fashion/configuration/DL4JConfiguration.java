@@ -11,8 +11,8 @@ import org.datavec.image.loader.BaseImageLoader;
 import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
+import org.deeplearning4j.eval.Evaluation;
 import org.deeplearning4j.nn.api.Model;
-import org.deeplearning4j.nn.api.NeuralNetwork;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
@@ -26,6 +26,7 @@ import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.util.ModelSerializer;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
@@ -88,8 +89,10 @@ public class DL4JConfiguration {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		log.info("Fitting....");
-		network.fit(loadData());
+		network.fit(loadTrainData());
 		log.info("Fit complete. ELapsed time: [{}]", stopWatch.toString());
+		evaluateNetwork(network);
+		saveNetwork(network, new File(COMPUTATION_GRAPH_FILE_NAME));
 		return network;
 
 	}
@@ -110,8 +113,36 @@ public class DL4JConfiguration {
 		}
 	}
 
-	private static DataSetIterator loadData() {
+	private static DataSetIterator loadTrainData() {
 		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train"),
+				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
+		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
+		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
+		// ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
+		// ImageTransform warpTransform = new WarpImageTransform(randNumGen, 42);
+		// List<ImageTransform> transforms = Arrays
+		// .asList(new ImageTransform[] { flipTransform1, warpTransform, flipTransform2
+		// });
+
+		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
+
+		try {
+			recordReader.initialize(split);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, 2);
+		DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
+		scaler.fit(dataIter);
+		dataIter.setPreProcessor(scaler);
+
+		return dataIter;
+
+	}
+
+	private static DataSetIterator loadTestData() {
+		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/valid"),
 				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
 		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
 		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
@@ -150,12 +181,25 @@ public class DL4JConfiguration {
 		return Optional.ofNullable(pretrainedNet);
 	}
 
-	private void saveCOmputationalGraph(ComputationGraph graph, File file) {
+	private void saveNetwork(MultiLayerNetwork network, File file) {
 		try {
-			ModelSerializer.writeModel(graph, file, false);
+			ModelSerializer.writeModel(network, file, false);
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
+	}
+
+	private void evaluateNetwork(MultiLayerNetwork network) {
+		log.info("Evaluate network....");
+		Evaluation eval = new Evaluation(2); // create an evaluation object with 10 possible classes
+		DataSetIterator testData = loadTestData();
+		while (testData.hasNext()) {
+			DataSet next = testData.next();
+			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
+			eval.eval(next.getLabels(), output); // check the prediction against the true class
+		}
+
+		log.info(eval.stats());
 	}
 }
