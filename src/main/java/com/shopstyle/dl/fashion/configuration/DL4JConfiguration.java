@@ -50,8 +50,8 @@ public class DL4JConfiguration {
 
 	private static final Random randNumGen = new Random(seed);
 
-//	private static final int height = 164;
-//	private static final int width = 205;
+	// private static final int height = 164;
+	// private static final int width = 205;
 	private static final int height = 224;
 	private static final int width = 224;
 	private static final int channels = 3;
@@ -81,11 +81,17 @@ public class DL4JConfiguration {
 				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
 				.updater(new Nesterovs(0.98)).regularization(true).l2(1e-4).list()
 				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(1000).build())
-				.layer(1, new DenseLayer.Builder().nIn(1000).nOut(500).build())
-				.layer(2, new DenseLayer.Builder().nIn(500).nOut(300).build())
-				.layer(3, new DenseLayer.Builder().nIn(300).nOut(100).build())
+				.layer(1,
+						new DenseLayer.Builder().nIn(1000).nOut(500).weightInit(WeightInit.XAVIER)
+								.activation(Activation.RELU).build())
+				.layer(2,
+						new DenseLayer.Builder().nIn(500).nOut(300).weightInit(WeightInit.XAVIER)
+								.activation(Activation.RELU).build())
+				.layer(3,
+						new DenseLayer.Builder().nIn(300).nOut(100).weightInit(WeightInit.XAVIER)
+								.activation(Activation.RELU).build())
 				.layer(4,
-						new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD).activation(Activation.SOFTMAX)
+						new OutputLayer.Builder(LossFunction.MSE).activation(Activation.SOFTMAX)
 								.nIn(100).nOut(numClasses).build())
 				.pretrain(false).backprop(true).setInputType(InputType.convolutional(height, width, channels)).build();
 
@@ -133,10 +139,11 @@ public class DL4JConfiguration {
 		FileSplit testFilesInDir = new FileSplit(testDir, NativeImageLoader.ALLOWED_FORMATS, randNumGen);
 		numClasses = trainDir.list().length;
 		log.info("numClasses = {}", numClasses);
-		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
 
-		ImageRecordReader trainRecordReader = new ImageRecordReader(height, width, channels, labelMaker);
-		ImageRecordReader testRecordReader = new ImageRecordReader(height, width, channels, labelMaker);
+		ImageRecordReader trainRecordReader = new ImageRecordReader(height, width, channels,
+				new ParentPathLabelGenerator());
+		ImageRecordReader testRecordReader = new ImageRecordReader(height, width, channels,
+				new ParentPathLabelGenerator());
 
 		try {
 			trainRecordReader.initialize(trainFilesInDir);
@@ -152,8 +159,7 @@ public class DL4JConfiguration {
 		trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
-		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, batchSize, 1,
-				numClasses);
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 1, 1, numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
 		testScaler.fit(testDataIter);
 		testDataIter.setPreProcessor(testScaler);
@@ -187,10 +193,9 @@ public class DL4JConfiguration {
 		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
-			log.info("Labels: {}", next.getLabelNames());
 			log.info("Labels: {}", next.getLabels());
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
-			log.info("Predictions: {}", next.getLabelNamesList());
+			log.info("Predictions: {}", output);
 			eval.eval(next.getLabels(), output); // check the prediction against the true class
 		}
 
