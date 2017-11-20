@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.Random;
 
+import org.datavec.api.io.filters.BalancedPathFilter;
 import org.datavec.api.io.labels.ParentPathLabelGenerator;
 import org.datavec.api.split.FileSplit;
+import org.datavec.api.split.InputSplit;
 import org.datavec.image.loader.BaseImageLoader;
 import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
@@ -19,7 +21,6 @@ import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
-import org.deeplearning4j.nn.graph.ComputationGraph;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
@@ -43,33 +44,35 @@ public class DL4JConfiguration {
 
 	private static final Logger log = org.slf4j.LoggerFactory.getLogger(DL4JConfiguration.class);
 	private static final String[] allowedExtensions = BaseImageLoader.ALLOWED_FORMATS;
-	private static final String COMPUTATION_GRAPH_FILE_NAME = "dogscats_comp_graph.dl4j";
+	private static final String COMPUTATION_GRAPH_FILE_NAME = "fashion_comp_graph.zip";
 
 	private static final long seed = 12345;
 
 	private static final Random randNumGen = new Random(seed);
 
-	private static final int height = 224;
-	private static final int width = 224;
+	private static final int height = 164;
+	private static final int width = 205;
 	private static final int channels = 3;
+	private int numClasses = 1;
+	private RecordReaderDataSetIterator trainDataIter;
+	private RecordReaderDataSetIterator testDataIter;
 
 	@Bean
 	public Model vgg16() {
-		int rngSeed = 123; // random number seed for reproducibility
 		double rate = 0.0015; // learning rate
-		int numClasses = 2;
-
-		Optional<ComputationGraph> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
+		loadData();
+		Optional<MultiLayerNetwork> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
 		if (optional.isPresent()) {
 			log.info("Loaded pretrained model:");
-			ComputationGraph computationGraph = optional.get();
-			log.info(computationGraph.summary());
-			validateSingleImage(computationGraph);
-			return computationGraph;
+			MultiLayerNetwork network = optional.get();
+			log.info(network.summary());
+//			validateSingleImage(network);
+			evaluateNetwork(network);
+			return network;
 		}
 
 		log.info("Building model....");
-		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(rngSeed)
+		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).iterations(1)
 				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
 				.updater(new Nesterovs(0.98)).regularization(true).l2(rate * 0.005).list()
@@ -89,7 +92,8 @@ public class DL4JConfiguration {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		log.info("Fitting....");
-		network.fit(loadTrainData());
+		network.fit(trainDataIter);
+		stopWatch.stop();
 		log.info("Fit complete. ELapsed time: [{}]", stopWatch.toString());
 		evaluateNetwork(network);
 		saveNetwork(network, new File(COMPUTATION_GRAPH_FILE_NAME));
@@ -97,24 +101,59 @@ public class DL4JConfiguration {
 
 	}
 
-	private void validateSingleImage(ComputationGraph graph) {
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/dogs");
-		File file = new File(dir, "dog.9993.jpg");
+	private void validateSingleImage(MultiLayerNetwork network) {
+		File dir = new File(System.getProperty("user.home"), "/popsugar/shopstyle/core/train/sweaters");
+		File file = new File(dir, "5015.jpg");
 		log.info("Validating: {}", file.getAbsolutePath());
 		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 		try {
 			INDArray image = loader.asMatrix(file);
 			DataNormalization scaler = new VGG16ImagePreProcessor();
 			scaler.transform(image);
-			INDArray[] output = graph.output(false, image);
-			log.info("Predictions: {}", file.getAbsolutePath(), output[0]);
+			INDArray output = network.output(image);
+			log.info("Predictions: {}", output);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	private static DataSetIterator loadTrainData() {
-		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train"),
+	private void loadData() {
+		File trainDir = new File(System.getProperty("user.home"), "/data/dogscats/train");
+		File testDir = new File(System.getProperty("user.home"), "/data/dogscats/valid");
+		FileSplit trainFilesInDir = new FileSplit(trainDir,
+				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
+		FileSplit testFilesInDir = new FileSplit(testDir,
+				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
+		numClasses = trainDir.list().length;
+		log.info("numClasses = {}", numClasses);
+		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
+
+		ImageRecordReader trainRecordReader = new ImageRecordReader(height, width, channels, labelMaker);
+		ImageRecordReader testRecordReader = new ImageRecordReader(height, width, channels, labelMaker);
+
+		try {
+			trainRecordReader.initialize(trainFilesInDir);
+			testRecordReader.initialize(testFilesInDir);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		RecordReaderDataSetIterator trainDataIter = new RecordReaderDataSetIterator(trainRecordReader, 20, 1, numClasses);
+		DataNormalization trainScaler = new ImagePreProcessingScaler(0, 1);
+		trainScaler.fit(trainDataIter);
+		trainDataIter.setPreProcessor(trainScaler);
+		this.trainDataIter = trainDataIter;
+
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 20, 1, numClasses);
+		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
+		testScaler.fit(testDataIter);
+		testDataIter.setPreProcessor(testScaler);
+		this.testDataIter = testDataIter;
+
+	}
+
+	private DataSetIterator loadTestData() {
+		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/popsugar/shopstyle/core/train"),
 				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
 		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
 		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
@@ -132,7 +171,7 @@ public class DL4JConfiguration {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, 2);
+		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, numClasses);
 		DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
 		scaler.fit(dataIter);
 		dataIter.setPreProcessor(scaler);
@@ -141,39 +180,11 @@ public class DL4JConfiguration {
 
 	}
 
-	private static DataSetIterator loadTestData() {
-		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/valid"),
-				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
-		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
-		// ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
-		// ImageTransform warpTransform = new WarpImageTransform(randNumGen, 42);
-		// List<ImageTransform> transforms = Arrays
-		// .asList(new ImageTransform[] { flipTransform1, warpTransform, flipTransform2
-		// });
-
-		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
-
-		try {
-			recordReader.initialize(split);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, 2);
-		DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
-		scaler.fit(dataIter);
-		dataIter.setPreProcessor(scaler);
-
-		return dataIter;
-
-	}
-
-	private Optional<ComputationGraph> loadComputationalGraph(File file) {
-		ComputationGraph pretrainedNet = null;
+	private Optional<MultiLayerNetwork> loadComputationalGraph(File file) {
+		MultiLayerNetwork pretrainedNet = null;
 		if (file.exists()) {
 			try {
-				pretrainedNet = ModelSerializer.restoreComputationGraph(file);
+				pretrainedNet = ModelSerializer.restoreMultiLayerNetwork(file);
 			} catch (IOException e1) {
 				e1.printStackTrace();
 			}
@@ -183,7 +194,7 @@ public class DL4JConfiguration {
 
 	private void saveNetwork(MultiLayerNetwork network, File file) {
 		try {
-			ModelSerializer.writeModel(network, file, false);
+			ModelSerializer.writeModel(network, file, true);
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
@@ -192,7 +203,7 @@ public class DL4JConfiguration {
 
 	private void evaluateNetwork(MultiLayerNetwork network) {
 		log.info("Evaluate network....");
-		Evaluation eval = new Evaluation(2); // create an evaluation object with 10 possible classes
+		Evaluation eval = new Evaluation(numClasses); // create an evaluation object with 10 possible classes
 		DataSetIterator testData = loadTestData();
 		while (testData.hasNext()) {
 			DataSet next = testData.next();
