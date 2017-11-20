@@ -152,34 +152,6 @@ public class DL4JConfiguration {
 
 	}
 
-	private DataSetIterator loadTestData() {
-		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/popsugar/shopstyle/core/train"),
-				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
-		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
-		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
-		// ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
-		// ImageTransform warpTransform = new WarpImageTransform(randNumGen, 42);
-		// List<ImageTransform> transforms = Arrays
-		// .asList(new ImageTransform[] { flipTransform1, warpTransform, flipTransform2
-		// });
-
-		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
-
-		try {
-			recordReader.initialize(split);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, numClasses);
-		DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
-		scaler.fit(dataIter);
-		dataIter.setPreProcessor(scaler);
-
-		return dataIter;
-
-	}
-
 	private Optional<MultiLayerNetwork> loadComputationalGraph(File file) {
 		MultiLayerNetwork pretrainedNet = null;
 		if (file.exists()) {
@@ -204,7 +176,7 @@ public class DL4JConfiguration {
 	private void evaluateNetwork(MultiLayerNetwork network) {
 		log.info("Evaluate network....");
 		Evaluation eval = new Evaluation(numClasses); // create an evaluation object with 10 possible classes
-		DataSetIterator testData = loadTestData();
+		DataSetIterator testData = testDataIter;
 		while (testData.hasNext()) {
 			DataSet next = testData.next();
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
