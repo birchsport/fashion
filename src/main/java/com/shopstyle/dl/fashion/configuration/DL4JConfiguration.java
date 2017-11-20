@@ -63,7 +63,7 @@ public class DL4JConfiguration {
 
 	@Bean
 	public MultiLayerNetwork createNetwork() {
-		double rate = 0.006; // learning rate
+		double rate = 0.001; // learning rate
 		loadData();
 		Optional<MultiLayerNetwork> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
 		if (optional.isPresent()) {
@@ -159,7 +159,7 @@ public class DL4JConfiguration {
 		trainDataIter.setPreProcessor(trainScaler);
 		this.trainDataIter = trainDataIter;
 
-		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 1, 1, numClasses);
+		RecordReaderDataSetIterator testDataIter = new RecordReaderDataSetIterator(testRecordReader, 64, 1, numClasses);
 		DataNormalization testScaler = new ImagePreProcessingScaler(0, 1);
 		testScaler.fit(testDataIter);
 		testDataIter.setPreProcessor(testScaler);
@@ -193,9 +193,9 @@ public class DL4JConfiguration {
 		Evaluation eval = new Evaluation(numClasses);
 		while (testDataIter.hasNext()) {
 			DataSet next = testDataIter.next();
-			log.info("Labels: {}", next.getLabels());
+//			log.info("Labels: {}", next.getLabels());
 			INDArray output = network.output(next.getFeatureMatrix()); // get the networks prediction
-			log.info("Predictions: {}", output);
+//			log.info("Predictions: {}", output);
 			eval.eval(next.getLabels(), output); // check the prediction against the true class
 		}
 
