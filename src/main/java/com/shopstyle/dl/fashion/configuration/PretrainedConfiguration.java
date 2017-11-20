@@ -55,7 +55,7 @@ public class PretrainedConfiguration {
 	private static final int height = 224;
 	private static final int width = 224;
 	private static final int channels = 3;
-	private static final int batchSize = 64;
+	private static final int batchSize = 8;
 	private static final int numEpochs = 1;
 	private int numClasses = 2;
 	private RecordReaderDataSetIterator trainDataIter;
