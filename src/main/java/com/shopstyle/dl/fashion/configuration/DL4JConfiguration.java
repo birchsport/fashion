@@ -2,44 +2,47 @@ package com.shopstyle.dl.fashion.configuration;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.Random;
 
 import org.datavec.api.io.labels.ParentPathLabelGenerator;
-import org.datavec.api.records.reader.RecordReader;
 import org.datavec.api.split.FileSplit;
 import org.datavec.image.loader.BaseImageLoader;
 import org.datavec.image.loader.NativeImageLoader;
 import org.datavec.image.recordreader.ImageRecordReader;
 import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.nn.api.Model;
+import org.deeplearning4j.nn.api.NeuralNetwork;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
-import org.deeplearning4j.nn.conf.Updater;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.graph.ComputationGraph;
-import org.deeplearning4j.nn.transferlearning.FineTuneConfiguration;
-import org.deeplearning4j.nn.transferlearning.TransferLearning;
-import org.deeplearning4j.nn.transferlearning.TransferLearningHelper;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.util.ModelSerializer;
-import org.deeplearning4j.zoo.PretrainedType;
-import org.deeplearning4j.zoo.ZooModel;
-import org.deeplearning4j.zoo.model.VGG16;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
+import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
 import org.nd4j.linalg.dataset.api.preprocessor.VGG16ImagePreProcessor;
-import org.nd4j.linalg.lossfunctions.LossFunctions;
+import org.nd4j.linalg.learning.config.Nesterovs;
+import org.nd4j.linalg.lossfunctions.LossFunctions.LossFunction;
 import org.slf4j.Logger;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StopWatch;
 
 @Configuration
 public class DL4JConfiguration {
 
 	private static final Logger log = org.slf4j.LoggerFactory.getLogger(DL4JConfiguration.class);
 	private static final String[] allowedExtensions = BaseImageLoader.ALLOWED_FORMATS;
+	private static final String COMPUTATION_GRAPH_FILE_NAME = "dogscats_comp_graph.dl4j";
 
 	private static final long seed = 12345;
 
@@ -48,118 +51,111 @@ public class DL4JConfiguration {
 	private static final int height = 224;
 	private static final int width = 224;
 	private static final int channels = 3;
-	private static final String featureExtractionLayer = "block5_pool";
 
 	@Bean
 	public Model vgg16() {
-		int outputNum = 10; // number of output classes
-		int batchSize = 64; // batch size for each epoch
 		int rngSeed = 123; // random number seed for reproducibility
-		int numEpochs = 15; // number of epochs to perform
 		double rate = 0.0015; // learning rate
 		int numClasses = 2;
 
-		ComputationGraph pretrainedNet = null;
-		File locationToSave = new File("MyComputationGraph.zip");
-		if (locationToSave.exists()) {
-			try {
-				pretrainedNet = ModelSerializer.restoreComputationGraph(locationToSave);
-			} catch (IOException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-		} else {
-
-			FineTuneConfiguration fineTuneConf = new FineTuneConfiguration.Builder().activation(Activation.LEAKYRELU)
-					.weightInit(WeightInit.RELU).learningRate(5e-5)
-					.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).updater(Updater.NESTEROVS)
-					.dropOut(0.5).seed(seed).build();
-
-			ZooModel zooModel = new VGG16();
-			try {
-				pretrainedNet = (ComputationGraph) zooModel.initPretrained(PretrainedType.IMAGENET);
-			} catch (IOException e) {
-				throw new IllegalStateException("Unable to load pretrained model");
-			}
-			pretrainedNet.init();
-
-			ComputationGraph vgg16Transfer = new TransferLearning.GraphBuilder(pretrainedNet)
-					.fineTuneConfiguration(fineTuneConf).setFeatureExtractor(featureExtractionLayer) // "block5_pool"
-																										// and
-																										// below are
-																										// frozen
-					.nOutReplace("fc2", 1024, WeightInit.XAVIER) // modify nOut of the "fc2" vertex
-					.removeVertexAndConnections("predictions") // remove the final vertex and it's connections
-					.addLayer("fc3", new DenseLayer.Builder().activation(Activation.TANH).nIn(1024).nOut(256).build(),
-							"fc2") // add in a new dense layer
-					.addLayer("newpredictions",
-							new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
-									.activation(Activation.SOFTMAX).nIn(256).nOut(numClasses).build(),
-							"fc3") // add in a final output dense layer,
-									// note that learning related configurations applied on a new layer here will be
-									// honored
-									// In other words - these will override the finetune confs.
-									// For eg. activation function will be softmax not RELU
-					.setOutputs("newpredictions") // since we removed the output vertex and it's connections we need to
-													// specify outputs for the graph
-					.build();
-			System.out.println(vgg16Transfer.summary());
-
-			RecordReaderDataSetIterator rrdi = new RecordReaderDataSetIterator(loadData(), 4, 1, numClasses);
-			vgg16Transfer.setListeners(new ScoreIterationListener());
-
-			TransferLearningHelper transferLearningHelper = new TransferLearningHelper(vgg16Transfer);
-
-			System.out.println("Fitting....");
-			// transferLearningHelper.fitFeaturized(rrdi);
-
-			int iter = 0;
-			while (rrdi.hasNext()) {
-				vgg16Transfer.fit(rrdi.next());
-				log.info("iter " + iter + " ....");
-				iter++;
-			}
-			System.out.println("Fit.");
-
-			boolean saveUpdater = false;
-			try {
-				ModelSerializer.writeModel(vgg16Transfer, locationToSave, saveUpdater);
-			} catch (IOException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-			pretrainedNet = vgg16Transfer;
+		Optional<ComputationGraph> optional = loadComputationalGraph(new File(COMPUTATION_GRAPH_FILE_NAME));
+		if (optional.isPresent()) {
+			log.info("Loaded pretrained model:");
+			ComputationGraph computationGraph = optional.get();
+			log.info(computationGraph.summary());
+			validateSingleImage(computationGraph);
+			return computationGraph;
 		}
-		//
-		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/dogs");
-		File file = new File(dir, "dog.9993.jpg");
-		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
-		INDArray image;
-		try {
-			image = loader.asMatrix(file);
-			DataNormalization scaler = new VGG16ImagePreProcessor();
-			scaler.transform(image);
-			INDArray[] output = pretrainedNet.output(false, image);
-			System.out.println(output[0]);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return pretrainedNet;
+
+		log.info("Building model....");
+		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(rngSeed)
+				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT).iterations(1)
+				.activation(Activation.RELU).weightInit(WeightInit.XAVIER).learningRate(rate)
+				.updater(new Nesterovs(0.98)).regularization(true).l2(rate * 0.005).list()
+				.layer(0, new DenseLayer.Builder().nIn(width * height * channels).nOut(500).build())
+				.layer(1, new DenseLayer.Builder().nIn(500).nOut(100).build())
+				.layer(2,
+						new OutputLayer.Builder(LossFunction.NEGATIVELOGLIKELIHOOD).activation(Activation.SOFTMAX)
+								.nIn(100).nOut(numClasses).build())
+				.pretrain(false).backprop(true).setInputType(InputType.convolutional(height, width, channels)).build();
+
+		MultiLayerNetwork network = new MultiLayerNetwork(conf);
+		network.init();
+		network.setListeners(new ScoreIterationListener(5));
+
+		log.info("Network summary:");
+		log.info(network.summary());
+		StopWatch stopWatch = new StopWatch();
+		stopWatch.start();
+		log.info("Fitting....");
+		network.fit(loadData());
+		log.info("Fit complete. ELapsed time: [{}]", stopWatch.toString());
+		return network;
 
 	}
 
-	private static RecordReader loadData() {
-		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train1"));
+	private void validateSingleImage(ComputationGraph graph) {
+		File dir = new File(System.getProperty("user.home"), "/data/dogscats/train/dogs");
+		File file = new File(dir, "dog.9993.jpg");
+		log.info("Validating: {}", file.getAbsolutePath());
+		NativeImageLoader loader = new NativeImageLoader(height, width, channels);
+		try {
+			INDArray image = loader.asMatrix(file);
+			DataNormalization scaler = new VGG16ImagePreProcessor();
+			scaler.transform(image);
+			INDArray[] output = graph.output(false, image);
+			log.info("Predictions: {}", file.getAbsolutePath(), output[0]);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static DataSetIterator loadData() {
+		FileSplit split = new FileSplit(new File(System.getProperty("user.home"), "/data/dogscats/train"),
+				NativeImageLoader.ALLOWED_FORMATS, randNumGen);
 		ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
+		// ImageTransform flipTransform1 = new FlipImageTransform(randNumGen);
+		// ImageTransform flipTransform2 = new FlipImageTransform(new Random(123));
+		// ImageTransform warpTransform = new WarpImageTransform(randNumGen, 42);
+		// List<ImageTransform> transforms = Arrays
+		// .asList(new ImageTransform[] { flipTransform1, warpTransform, flipTransform2
+		// });
+
 		ImageRecordReader recordReader = new ImageRecordReader(height, width, channels, labelMaker);
+
 		try {
 			recordReader.initialize(split);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		return recordReader;
+		RecordReaderDataSetIterator dataIter = new RecordReaderDataSetIterator(recordReader, 4, 1, 2);
+		DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
+		scaler.fit(dataIter);
+		dataIter.setPreProcessor(scaler);
 
+		return dataIter;
+
+	}
+
+	private Optional<ComputationGraph> loadComputationalGraph(File file) {
+		ComputationGraph pretrainedNet = null;
+		if (file.exists()) {
+			try {
+				pretrainedNet = ModelSerializer.restoreComputationGraph(file);
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+		}
+		return Optional.ofNullable(pretrainedNet);
+	}
+
+	private void saveCOmputationalGraph(ComputationGraph graph, File file) {
+		try {
+			ModelSerializer.writeModel(graph, file, false);
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 	}
 }
